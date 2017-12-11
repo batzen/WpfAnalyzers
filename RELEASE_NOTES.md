@@ -1,3 +1,7 @@
+#### 1.1.0
+* WPF0050 default warning.
+* BUGFIX: handle as casts.
+
 #### 1.0.0
 * New analyzers
 
