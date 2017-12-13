@@ -1,3 +1,6 @@
+#### 1.1.1
+* BUGFIX: allow as casts of interfaces.
+
 #### 1.1.0
 * WPF0050 default warning.
 * BUGFIX: handle as casts.
