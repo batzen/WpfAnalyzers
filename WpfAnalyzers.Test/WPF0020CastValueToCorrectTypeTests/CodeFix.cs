@@ -1,11 +1,11 @@
-﻿namespace WpfAnalyzers.Test.WPF0019CastSenderToCorrectTypeTests
+﻿namespace WpfAnalyzers.Test.WPF0020CastValueToCorrectTypeTests
 {
     using Gu.Roslyn.Asserts;
     using NUnit.Framework;
 
-    internal class Diagnostic
+    internal class CodeFix
     {
-        private static readonly ExpectedDiagnostic ExpectedDiagnostic = ExpectedDiagnostic.Create("WPF0019");
+        private static readonly ExpectedDiagnostic ExpectedDiagnostic = ExpectedDiagnostic.Create("WPF0020");
 
         [Test]
         public void Message()
@@ -32,14 +32,14 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (↓string)e.NewValue;
         }
     }
 }";
 
             var expectedDiagnostic = ExpectedDiagnostic.Create(
-                "WPF0019",
-                "Sender is of type FooControl.");
+                "WPF0020",
+                "Value is of type int.");
             AnalyzerAssert.Diagnostics<CallbackMethodDeclarationAnalyzer>(expectedDiagnostic, testCode);
         }
 
@@ -69,7 +69,7 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (↓string)e.NewValue;
         }
     }
 }";
@@ -96,7 +96,7 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (FooControl)d;
+            var value = (int)e.NewValue;
         }
     }
 }";
@@ -137,8 +137,7 @@ namespace RoslynSandbox
 
         private static object CoerceValue(DependencyObject d, object basevalue)
         {
-            var control = (↓DataGrid)d;
-            return basevalue;
+            return (↓string)basevalue;
         }
     }
 }";
@@ -170,8 +169,7 @@ namespace RoslynSandbox
 
         private static object CoerceValue(DependencyObject d, object basevalue)
         {
-            var control = (FooControl)d;
-            return basevalue;
+            return (int)basevalue;
         }
     }
 }";
@@ -180,8 +178,92 @@ namespace RoslynSandbox
             AnalyzerAssert.CodeFix<CallbackMethodDeclarationAnalyzer, FixCastCodeFixProvider>(ExpectedDiagnostic, testCode, fixedCode);
         }
 
-        [TestCase("(↓DataGrid)d", "(FooControl)d")]
-        [TestCase("d as ↓DataGrid", "d as FooControl")]
+        [TestCase("ValidateValue")]
+        [TestCase("new ValidateValueCallback(ValidateValue)")]
+        public void DependencyPropertyRegisterValidateValue(string validateValue)
+        {
+            var testCode = @"
+namespace RoslynSandbox
+{
+    using System.Windows;
+    using System.Windows.Controls;
+
+    public class FooControl : Control
+    {
+        public static readonly DependencyProperty ValueProperty = DependencyProperty.Register(
+            nameof(Value),
+            typeof(int),
+            typeof(FooControl),
+            new PropertyMetadata(1, OnValueChanged, CoerceValue),
+            ValidateValue);
+
+        public int Value
+        {
+            get { return (int)this.GetValue(ValueProperty); }
+            set { this.SetValue(ValueProperty, value); }
+        }
+
+        private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var control = (FooControl)d;
+        }
+
+        private static object CoerceValue(DependencyObject d, object basevalue)
+        {
+            return (int)basevalue;
+        }
+
+        private static bool ValidateValue(object basevalue)
+        {
+            return ((↓string)basevalue) > 1;
+        }
+    }
+}";
+
+            var fixedCode = @"
+namespace RoslynSandbox
+{
+    using System.Windows;
+    using System.Windows.Controls;
+
+    public class FooControl : Control
+    {
+        public static readonly DependencyProperty ValueProperty = DependencyProperty.Register(
+            nameof(Value),
+            typeof(int),
+            typeof(FooControl),
+            new PropertyMetadata(1, OnValueChanged, CoerceValue),
+            ValidateValue);
+
+        public int Value
+        {
+            get { return (int)this.GetValue(ValueProperty); }
+            set { this.SetValue(ValueProperty, value); }
+        }
+
+        private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var control = (FooControl)d;
+        }
+
+        private static object CoerceValue(DependencyObject d, object basevalue)
+        {
+            return (int)basevalue;
+        }
+
+        private static bool ValidateValue(object basevalue)
+        {
+            return ((int)basevalue) > 1;
+        }
+    }
+}";
+            testCode = testCode.AssertReplace("ValidateValue);", validateValue + ");");
+            fixedCode = fixedCode.AssertReplace("ValidateValue);", validateValue + ");");
+            AnalyzerAssert.CodeFix<CallbackMethodDeclarationAnalyzer, FixCastCodeFixProvider>(ExpectedDiagnostic, testCode, fixedCode);
+        }
+
+        [TestCase("(↓string)e.NewValue", "(int)e.NewValue")]
+        [TestCase("(↓string)e.OldValue", "(int)e.OldValue")]
         public void DependencyPropertyRegisterCast(string fromCast, string toCast)
         {
             var testCode = @"
@@ -206,7 +288,7 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (↓string)e.NewValue;
         }
     }
 }";
@@ -233,12 +315,12 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (FooControl)d;
+            var value = (int)e.NewValue;
         }
     }
 }";
-            testCode = testCode.AssertReplace("(↓DataGrid)d", fromCast);
-            fixedCode = fixedCode.AssertReplace("(FooControl)d", toCast);
+            testCode = testCode.AssertReplace("(↓string)e.NewValue", fromCast);
+            fixedCode = fixedCode.AssertReplace("(int)e.NewValue", toCast);
 
             AnalyzerAssert.CodeFix<CallbackMethodDeclarationAnalyzer, FixCastCodeFixProvider>(ExpectedDiagnostic, testCode, fixedCode);
         }
@@ -270,7 +352,7 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (↓string)e.NewValue;
         }
     }
 }";
@@ -299,14 +381,13 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (FooControl)d;
+            var value = (int)e.NewValue;
         }
     }
 }";
             AnalyzerAssert.CodeFix<CallbackMethodDeclarationAnalyzer, FixCastCodeFixProvider>(ExpectedDiagnostic, testCode, fixedCode);
         }
 
-        [Explicit("Not handling this yet.")]
         [Test]
         public void DependencyPropertyRegisterAttached()
         {
@@ -329,7 +410,7 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (↓string)e.NewValue;
         }
     }
 }";
@@ -345,22 +426,21 @@ namespace RoslynSandbox
             ""Bar"",
             typeof(int),
             typeof(Foo),
-            new PropertyMetadata(1, OnBarChanged));
+            new PropertyMetadata(1, OnValueChanged));
 
         public static void SetBar(this FrameworkElement element, int value) => element.SetValue(BarProperty, value);
 
         public static int GetBar(this FrameworkElement element) => (int)element.GetValue(BarProperty);
 
-        private static void OnBarChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (int)e.NewValue;
         }
     }
 }";
             AnalyzerAssert.CodeFix<CallbackMethodDeclarationAnalyzer, FixCastCodeFixProvider>(ExpectedDiagnostic, testCode, fixedCode);
         }
 
-        [Explicit("Not handling this yet.")]
         [Test]
         public void DependencyPropertyRegisterAttachedReadOnly()
         {
@@ -385,7 +465,7 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (↓string)e.NewValue;
         }
     }
 }";
@@ -401,7 +481,7 @@ namespace RoslynSandbox
             ""Bar"",
             typeof(int),
             typeof(Foo),
-            new PropertyMetadata(default(int), OnBarChanged));
+            new PropertyMetadata(default(int), OnValueChanged));
 
             public static readonly DependencyProperty BarProperty = BarPropertyKey.DependencyProperty;
 
@@ -409,9 +489,9 @@ namespace RoslynSandbox
 
         public static int GetBar(this FrameworkElement element) => (int)element.GetValue(BarProperty);
 
-        private static void OnBarChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (int)e.NewValue;
         }
     }
 }";
@@ -438,7 +518,7 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (↓string)e.NewValue;
         }
     }
 }";
@@ -459,7 +539,7 @@ namespace RoslynSandbox
 
         private static void OnBackgroundChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (↓string)e.NewValue;
         }
     }
 }";
@@ -486,7 +566,7 @@ namespace RoslynSandbox
 
         private static void OnValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var control = (↓DataGrid)d;
+            var value = (↓string)e.NewValue;
         }
     }
 }";

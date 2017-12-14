@@ -12,7 +12,9 @@
         /// <inheritdoc/>
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = ImmutableArray.Create(
             WPF0019CastSenderToCorrectType.Descriptor,
-            WPF0020CastValueToCorrectType.Descriptor);
+            WPF0020CastValueToCorrectType.Descriptor,
+            WPF0021DirectCastSenderToExactType.Descriptor,
+            WPF0022DirectCastValueToExactType.Descriptor);
 
         /// <inheritdoc/>
         public override void Initialize(AnalysisContext context)
@@ -43,8 +45,8 @@
                     argParameter.Type == KnownSymbol.DependencyPropertyChangedEventArgs &&
                     TryGetExpectedTypes(callbackArg, method.ContainingType, context, out var senderType, out var valueType))
                 {
-                    HandleCasts(context, methodDeclaration, argParameter, valueType, WPF0020CastValueToCorrectType.Descriptor);
-                    HandleCasts(context, methodDeclaration, senderParameter, senderType, WPF0019CastSenderToCorrectType.Descriptor);
+                    HandleCasts(context, methodDeclaration, argParameter, valueType, WPF0020CastValueToCorrectType.Descriptor, WPF0021DirectCastSenderToExactType.Descriptor);
+                    HandleCasts(context, methodDeclaration, senderParameter, senderType, WPF0019CastSenderToCorrectType.Descriptor, WPF0022DirectCastValueToExactType.Descriptor);
                 }
 
                 // CoerceValueCallback
@@ -56,8 +58,8 @@
                     argParameter.Type == KnownSymbol.Object &&
                     TryGetExpectedTypes(callbackArg, method.ContainingType, context, out senderType, out valueType))
                 {
-                    HandleCasts(context, methodDeclaration, argParameter, valueType, WPF0020CastValueToCorrectType.Descriptor);
-                    HandleCasts(context, methodDeclaration, senderParameter, senderType, WPF0019CastSenderToCorrectType.Descriptor);
+                    HandleCasts(context, methodDeclaration, argParameter, valueType, WPF0020CastValueToCorrectType.Descriptor, WPF0021DirectCastSenderToExactType.Descriptor);
+                    HandleCasts(context, methodDeclaration, senderParameter, senderType, WPF0019CastSenderToCorrectType.Descriptor, WPF0022DirectCastValueToExactType.Descriptor);
                 }
 
                 // ValidateValueCallback
@@ -80,13 +82,13 @@
                          DependencyProperty.TryGetRegisterAttachedReadOnlyCall(invocation, context.SemanticModel, context.CancellationToken, out _)) &&
                         TryGetRegisteredType(invocation, 1, method.ContainingType, context, out valueType))
                     {
-                        HandleCasts(context, methodDeclaration, argParameter, valueType, WPF0020CastValueToCorrectType.Descriptor);
+                        HandleCasts(context, methodDeclaration, argParameter, valueType, WPF0020CastValueToCorrectType.Descriptor, WPF0022DirectCastValueToExactType.Descriptor);
                     }
                 }
             }
         }
 
-        private static void HandleCasts(SyntaxNodeAnalysisContext context, MethodDeclarationSyntax methodDeclaration, IParameterSymbol parameter, ITypeSymbol expectedType, DiagnosticDescriptor descriptor)
+        private static void HandleCasts(SyntaxNodeAnalysisContext context, MethodDeclarationSyntax methodDeclaration, IParameterSymbol parameter, ITypeSymbol expectedType, DiagnosticDescriptor wrongTypeDescriptor, DiagnosticDescriptor notExactTypeDescriptor)
         {
             if (expectedType == null)
             {
@@ -107,24 +109,38 @@
                     }
 
                     if (parent is CastExpressionSyntax castExpression &&
-                        context.SemanticModel.GetTypeInfoSafe(castExpression.Type, context.CancellationToken).Type is ITypeSymbol castType &&
-                        !expectedType.Is(castType))
+                        context.SemanticModel.GetTypeInfoSafe(castExpression.Type, context.CancellationToken)
+                               .Type is ITypeSymbol castType &&
+                        !Equals(castType, expectedType))
                     {
                         var expectedTypeName = expectedType.ToMinimalDisplayString(
                             context.SemanticModel,
                             castExpression.SpanStart,
                             SymbolDisplayFormat.MinimallyQualifiedFormat);
-                        context.ReportDiagnostic(
-                            Diagnostic.Create(
-                                descriptor,
-                                castExpression.Type.GetLocation(),
-                                ImmutableDictionary<string, string>.Empty.Add("ExpectedType", expectedTypeName),
-                                expectedTypeName));
+                        if (!expectedType.Is(castType))
+                        {
+                            context.ReportDiagnostic(
+                                Diagnostic.Create(
+                                    wrongTypeDescriptor,
+                                    castExpression.Type.GetLocation(),
+                                    ImmutableDictionary<string, string>.Empty.Add("ExpectedType", expectedTypeName),
+                                    expectedTypeName));
+                        }
+                        else
+                        {
+                            context.ReportDiagnostic(
+                                Diagnostic.Create(
+                                    notExactTypeDescriptor,
+                                    castExpression.Type.GetLocation(),
+                                    ImmutableDictionary<string, string>.Empty.Add("ExpectedType", expectedTypeName),
+                                    expectedTypeName));
+                        }
                     }
 
                     if (parent is BinaryExpressionSyntax binaryExpression &&
                         binaryExpression.IsKind(SyntaxKind.AsExpression) &&
-                        context.SemanticModel.GetTypeInfoSafe(binaryExpression.Right, context.CancellationToken).Type is ITypeSymbol asType &&
+                        context.SemanticModel.GetTypeInfoSafe(binaryExpression.Right, context.CancellationToken)
+                               .Type is ITypeSymbol asType &&
                         !asType.IsInterface() &&
                         !expectedType.IsInterface() &&
                         !asType.Is(expectedType))
@@ -135,7 +151,7 @@
                             SymbolDisplayFormat.MinimallyQualifiedFormat);
                         context.ReportDiagnostic(
                             Diagnostic.Create(
-                                descriptor,
+                                wrongTypeDescriptor,
                                 binaryExpression.Right.GetLocation(),
                                 ImmutableDictionary<string, string>.Empty.Add("ExpectedType", expectedTypeName),
                                 expectedTypeName));
