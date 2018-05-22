@@ -40,6 +40,10 @@ Roslyn analyzers for WPF.
   <td>Name of ValidateValueCallback should match registered name.</td>
 </tr>
 <tr>
+  <td><a href="https://github.com/DotNetAnalyzers/WpfAnalyzers/tree/master/documentation/WPF0008.md">WPF0008</a></td>
+  <td>Name of dependency property should be set using nameof.</td>
+</tr>
+<tr>
   <td><a href="https://github.com/DotNetAnalyzers/WpfAnalyzers/tree/master/documentation/WPF0010.md">WPF0010</a></td>
   <td>Default value type must match registered type.</td>
 </tr>
