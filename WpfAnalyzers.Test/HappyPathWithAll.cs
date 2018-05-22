@@ -200,7 +200,7 @@ internal static class BooleanBoxes
         public static readonly DependencyProperty BarProperty = Foo.BarProperty.AddOwner(typeof(FooControl));
 
         private static readonly DependencyPropertyKey ReadOnlyValuePropertyKey = DependencyProperty.RegisterReadOnly(
-            ""ReadOnlyValue"",
+            nameof(ReadOnlyValue),
             typeof(string),
             typeof(FooControl),
             new PropertyMetadata(default(string)));
