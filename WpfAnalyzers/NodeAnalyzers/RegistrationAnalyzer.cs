@@ -71,14 +71,13 @@ namespace WpfAnalyzers
 
             string GetSuggestedName()
             {
-                var suggestedName = literalExpressionSyntax.Token.ValueText;
-
                 if (BackingFieldOrProperty.TryCreate(context.ContainingSymbol, out var fieldOrProperty))
                 {
-                    suggestedName = TrimSuffix(fieldOrProperty.Name);
+                    return TrimSuffix(fieldOrProperty.Name);
                 }
 
-                return suggestedName;
+                // If there is no field/property we can use, just return the provided string literal
+                return literalExpressionSyntax.Token.ValueText;
 
                 string TrimSuffix(string fieldOrPropertyName)
                 {
