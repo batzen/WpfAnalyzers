@@ -64,27 +64,39 @@ namespace WpfAnalyzers
                 && invocationExpressionSyntax.TryFindArgument(nameParameter, out var nameArgument)
                 && nameArgument.Expression is LiteralExpressionSyntax literalExpressionSyntax)
             {
+                var suggestedName = GetSuggestedName();
+
+                context.ReportDiagnostic(Diagnostic.Create(WPF0008RegisterShouldUseNameOf.Descriptor, nameArgument.GetLocation(), ImmutableDictionary<string, string>.Empty.Add("SuggestedName", $"{suggestedName}"), suggestedName, literalExpressionSyntax.Token.ValueText));
+            }
+
+            string GetSuggestedName()
+            {
                 var suggestedName = literalExpressionSyntax.Token.ValueText;
 
                 if (BackingFieldOrProperty.TryCreate(context.ContainingSymbol, out var fieldOrProperty))
                 {
-                    suggestedName = fieldOrProperty.Name;
+                    suggestedName = TrimSuffix(fieldOrProperty.Name);
                 }
 
-                if (suggestedName.EndsWith("PropertyKey"))
-                {
-                    suggestedName = suggestedName.Substring(0, suggestedName.Length - "PropertyKey".Length);
-                }
-                else if (suggestedName.EndsWith("Property"))
-                {
-                    suggestedName = suggestedName.Substring(0, suggestedName.Length - "Property".Length);
-                }
+                return suggestedName;
 
-                //var variableDeclarator = invocationExpressionSyntax.FirstAncestor<VariableDeclaratorSyntax>();
-                //variableDeclarator.Identifier.ValueText
-                //propertyDeclaration.Identifier.
-                
-                context.ReportDiagnostic(Diagnostic.Create(WPF0008RegisterShouldUseNameOf.Descriptor, nameArgument.GetLocation(), ImmutableDictionary<string, string>.Empty.Add("SuggestedName", $"{suggestedName}"), suggestedName, literalExpressionSyntax.Token.ValueText));
+                string TrimSuffix(string fieldOrPropertyName)
+                {
+                    const string propertykeySuffix = "PropertyKey";
+                    const string propertySuffix = "Property";
+
+                    if (fieldOrPropertyName.EndsWith(propertykeySuffix))
+                    {
+                        return fieldOrPropertyName.Substring(0, fieldOrPropertyName.Length - propertykeySuffix.Length);
+                    }
+
+                    if (fieldOrPropertyName.EndsWith(propertySuffix))
+                    {
+                        return fieldOrPropertyName.Substring(0, fieldOrPropertyName.Length - propertySuffix.Length);
+                    }
+
+                    return fieldOrPropertyName;
+                }
             }
         }
     }
